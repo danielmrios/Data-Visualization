@@ -1,0 +1,122 @@
+---
+title: "Assignment 3"
+author: "Daniel Rios"
+format: docx
+editor: visual
+---
+
+## Question 1
+
+```{r}
+echo = TRUE
+library(tidyverse)
+library(rio)
+
+USMA <- import('USMA_Progression.xlsx')
+```
+
+## Question 2
+
+```{r}
+USMA <- USMA %>%
+  group_by(year, company_n) %>% 
+  summarize(femalepeers2 = sum(female), .groups = "drop") %>%
+  left_join(USMA, by = c('year', 'company_n')) %>%
+  mutate(femalepeers2 = case_when(
+    female == 1 ~ femalepeers2 - 1,
+    TRUE ~ femalepeers2))
+  
+USMA
+```
+
+```{r}
+USMA <- USMA %>%
+  group_by(year, company_n) %>% 
+  summarize(malepeers2 = sum(case_when(female == 0 ~ 1, TRUE ~ 0)),
+            .groups = "drop") %>%
+  left_join(USMA, by = c('year', 'company_n')) %>%
+  mutate(malepeers2 = case_when(
+    female == 0 ~ malepeers2 - 1,
+    TRUE ~ malepeers2))
+
+USMA
+```
+
+```{r}
+USMA <- USMA %>% 
+  group_by(year, company_n) %>%
+  summarize(totpeople2 = n(), .groups = "drop") %>%
+  left_join(USMA, by = c('year', 'company_n'))
+
+USMA
+```
+
+## Question 3
+
+For the malespeers and femalespeers columns the data not lining up seems to be occurring because they tend to display the **total** number of males or females rather than the peers (not including themselves). I would trust my recreation more because the calculation in itself should be accurate as it accounts for themself using the female column directly, in addition to that I have gone through a handful of classes and can see the problem being fixed.
+
+The totpeople column typically has 1 more value than the recreation and it's not entirely clear why. The variable is described as being femalespeers + malespeers, but that's not accurate, this could be found just by looking at the first few classes. Perhaps it's assumed that the peers factor is taken into account, so it's adjusted (+1 person) each time to account for the total. I decided to look into the instances where the recreation did match the original, and in these instances the peers data is accurate. So for the majority of the classes, with peer data being inaccurate, it could also be causing total people to be. I trust my recreation more because this counts the number of records in each class which seems (as we saw) to be a more concrete and accurate way of counting the total number of people, as well as checking over a handful of classes.
+
+```{r}
+i <- USMA %>%
+  filter(totpeople == totpeople2) %>%
+  select(company_n,`totpeople`,`totpeople2`)
+i
+```
+
+## Question 4
+
+```{r}
+USMA <- USMA %>%
+  mutate(company = str_sub(company_n, 1, 1)) %>%
+  mutate(division = str_sub(company_n, 3)) 
+
+USMA
+```
+
+## Question 5
+
+```{r}
+USMA <- USMA %>%
+  group_by(year) %>%
+  summarize(totclasses = n_distinct(class)) %>%
+  filter(totclasses >= 4) %>%
+  left_join(USMA, by = 'year')
+
+USMA
+```
+
+## Question 6
+
+### a.
+
+```{r}
+top_grad_rates <- USMA %>%
+  group_by(company) %>%
+  summarize(rate = sum(continue_or_grad == 1) / n()) %>%
+  arrange(desc(rate)) %>%
+  slice(1:4)
+
+top_grad_rates
+```
+
+### b.
+
+```{r}
+class_grad_rates <- USMA %>%
+  group_by(class) %>%
+  summarize(c_rate = sum(continue_or_grad == 1) / n())
+
+class_grad_rates
+```
+
+### c.
+
+```{r}
+female_grad_rates <- USMA %>%
+  group_by(class) %>%
+  filter(female == 1) %>%
+  summarize(f_rate = sum(continue_or_grad == 1) / n())
+
+female_grad_rates
+```

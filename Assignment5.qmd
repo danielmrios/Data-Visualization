@@ -1,0 +1,101 @@
+---
+title: "Assignment 5"
+format: pdf
+editor: visual
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(vtable)
+
+winners <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2023/2023-04-25/winners.csv')
+london_marathon <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2023/2023-04-25/london_marathon.csv')
+```
+
+```{r}
+vtable(winners)
+vtable(london_marathon)
+```
+
+```{r}
+ggplot(london_marathon, aes(x = Year, y = Starters)) + 
+  geom_col() 
+```
+
+```{r}
+ggplot(london_marathon, aes(x = Raised, y = Starters, color = Year)) + 
+  geom_point() + geom_smooth(method = 'lm', se = FALSE) 
+```
+
+```{r}
+ggplot(winners, aes(x = Year, y = `Time`)) + 
+  geom_col() 
+```
+
+```{r}
+london_marathon <- london_marathon %>%
+  mutate(Completed = `Finishers`/Starters)
+
+london_marathon
+```
+
+## Finishing Stronger? Percentage of London Marathon participants to **finish** the marathon over time. 
+
+```{r}
+ggplot(london_marathon, aes(x = Year, y = Completed)) + 
+  geom_point(color = "navyblue") + 
+  ylim(0.85, 1.0) + 
+  scale_y_continuous(labels = scales::percent) +
+  theme_minimal() + 
+  ggtitle("Finishing Stronger? \n Percentage of London Marathon Participants to Finish the Marathon over time") +
+  labs(x = "Year", y = "Finished") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  annotate("text", x = 1991, y = 0.82, label = "From 1980 to 1999, 94.8% of participants \n finished the marathon", 
+           size = 3.5, vjust = -1.5, color = "black") +
+   annotate("text", x = 2010.5, y = 0.865, label = "From 2000 to 2019, 98.7% of participants \n finished the marathon", 
+             size = 3.5, vjust = -1.5, color = "black") +
+   annotate("text", x = 2004, y = 0.78, label = "Note: 2020 edition was held during COVID-19
+            Pandemic and had several restrictions and modifications", 
+             size = 3, vjust = -1.5, color = "black") +
+   annotate("segment", x = 1993, xend = 1991, y = 0.88, yend = 0.915,
+           colour = "black", size = 2, arrow = arrow()) +
+  annotate("segment", x = 2012, xend = 2010, y = 0.925, yend = 0.96,
+           colour = "black", size = 2, arrow = arrow()) +
+   annotate("segment", x = 2017, xend = 2019.5, y = 0.815, yend = 0.797,
+           colour = "black", size = 2, arrow = arrow()) +
+  theme(axis.text = element_text(color = "black", size = 10)) +
+  annotate("segment", x = 1980, y = 0.948, xend = 2000, yend = 0.948, linetype = 2, color = "red3") + 
+  annotate("segment", x = 2000, y = 0.987, xend = 2019, yend = 0.987, linetype = 2, color = "red3")
+```
+
+```{r}
+london_marathon <- london_marathon %>%
+  mutate(Percent_Accepted = Accepted/Applicants)
+
+Combined <- left_join(winners, london_marathon, by = "Year")
+
+ggplot(london_marathon, aes(x = Percent_Accepted, y = Completed, color = Year)) + 
+  geom_point() + 
+  ylim(0.85, 1.0) + 
+  scale_y_continuous(labels = scales::percent) +
+  scale_x_continuous(labels = scales::percent) +
+  scale_x_reverse() +
+  geom_smooth(method = 'lm', se = FALSE) 
+```
+
+```{r}
+averages <- london_marathon %>%
+  filter(Year >= 1980 & Year <= 1999) %>%
+  summarize(first = mean(Completed))
+
+averages
+```
+
+```{r}
+averages <- london_marathon %>%
+  filter(Year >= 2000 & Year <= 2019) %>%
+  summarize(second = mean(Completed))
+
+averages
+```

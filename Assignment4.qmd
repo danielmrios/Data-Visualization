@@ -1,0 +1,144 @@
+---
+title: "Assignment 4"
+author: "Daniel Rios"
+format: html
+editor: visual
+---
+
+## Exploratory Data Analysis
+
+```{r}
+echo = TRUE
+```
+
+```{r}
+library(rio)
+library(vtable)
+col <- import('college_expenses_and_enrollment.Rds') 
+vtable(col)
+```
+
+```{r}
+library(ggplot2)
+library(scales)
+library(dplyr)
+
+# I first wanted to find if there was a coorelation between the tuition for a school and the money they spend back. Student Services seemed like a good place to start.
+
+col <- col %>%
+  mutate(TuitionPer = Tuition / Total.Enrollment) %>%
+  mutate(ServicesPer = Student.Services / Total.Enrollment)
+
+
+ggplot(col, aes(x = TuitionPer, y = `ServicesPer`)) + 
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_y_continuous(labels = label_number(scale = 1/100000, suffix = 'K')) +
+  ylim(0, 20000) + 
+  xlim(0, 175000)
+
+
+
+# there ended up being a major outlier in Tuition per student with 'Ultimate Medical Academy' with about 1,000,000 in tuition which was interesting, but I wanted to key in on where most of the data was So I limited the axis 
+```
+
+```{r}
+library(tidyverse)
+col %>%
+  arrange(desc(TuitionPer))
+
+# finding the outlier
+```
+
+```{r}
+
+# I wanted to then focus in on a more specific variable, the type of colleges and their corresponding average student services expenses 
+
+ggplot(col, aes(x = as.factor(type),y=Student.Services)) + 
+  geom_col() + 
+  coord_flip() + 
+  scale_y_continuous(labels = label_number(scale = 1/100000000, suffix = 'M')) +
+  labs(x = 'Type', y = 'Student Service Expenses')
+
+# this graph turned out to be very interesting considering the difference between for profits and non-profits/public 
+```
+
+```{r}
+# next I want to look at the student resources each type of college spends per student, a more broad view than just student services 
+# student services, instruction expenses, and academic support seem to be the best variables to include
+expenses <- col %>%
+  mutate(avg = (Student.Services + Instruction + Academic.Support) / Total.Enrollment) %>%
+  group_by(type) 
+```
+
+```{r}
+expenses_avg <- expenses %>%
+  group_by(type) %>%
+  summarize(avg = mean(avg))
+
+expenses
+```
+
+```{r}
+ggplot(expenses, aes(x = type, y = avg)) + 
+  geom_col() + 
+  coord_flip() +
+  scale_y_continuous(labels = label_number(scale = 1/100000, suffix = 'K'))
+  labs(x = 'Type', y = 'Student Service Expenses')
+```
+
+The graph confirms the previous findings, but also shows that private Non-profits far and away spend the most money per student of the types of colleges.
+
+From this point I'm interested in finding the best return on value for colleges by type, as we know the tuition varies vastly by the type of college and this should be accounted for.
+
+```{r}
+
+# Because the previous graph didn't account for tuition cost, I'll shift focus to this now
+
+tuition_to_value <- expenses %>%
+  group_by(type) %>%
+  mutate(tvalue = avg/TuitionPer)
+```
+
+```{r}
+tuition_to_value %>%
+  summarize(tvalue = mean(tvalue))
+
+tuition_to_value
+```
+
+```{r}
+# want to group the types into categories together 
+tuition_to_value <- tuition_to_value %>%
+  mutate(college_category = case_when(
+    grepl("*public*", type, ignore.case = TRUE) | 
+      grepl("*public*", type, ignore.case = TRUE) ~ "Public",
+    grepl("*private*", type, ignore.case = TRUE) | 
+      grepl("*private*", type, ignore.case = TRUE) ~ "Private Non-Profit",
+    grepl("*for-profit*", type, ignore.case = TRUE) | 
+      grepl("*for-profit*", type, ignore.case = TRUE) ~ "For-Profit",
+    TRUE ~ NA_character_ )) %>%
+  mutate(college_category = factor(college_category, levels = c("Public", "Private Non-Profit", "For-Profit")))
+
+ggplot(tuition_to_value, aes(x = tvalue, y = type, fill = college_category)) + 
+  stat_summary(fun = "mean", geom = "col") + 
+   scale_x_continuous(labels = scales::dollar_format()) +
+  geom_text(stat = "summary", fun = "mean", aes(label = round(..x.., 2)), hjust = 1.1) +
+  labs(x = "Student Resource spending per Tuition Dollar", y = "Type of College", title = "What Types of Colleges Offer the Best Value for Money?") +
+  scale_fill_manual(values = c('Public'='green3','Private Non-Profit'='yellow3','For-Profit'='tomato')) +
+  guides(fill=guide_legend(title="College Type")) 
+
+# This isn't at the bottom but I chose to make this the more presentable graph
+# tried to add dollar sign to labels but couldn't quite figure it out
+```
+
+For every dollar of tuition spent this is the amount the college spends on student resources in return. The higher the ratio, the better. It looks like Public 2-years offer the best value with public 4-years at second best. Notably we find for-profit schools offering the worst value.
+
+Next I want to see this relationship as a plot graph with a trendline by college type
+
+```{r}
+ggplot(tuition_to_value, aes(x = TuitionPer, y = avg, color = type)) + 
+  geom_point() + geom_smooth(method = 'lm', se = FALSE) + 
+  ylim(0, 250000) + 
+  xlim(0, 200000)
+```

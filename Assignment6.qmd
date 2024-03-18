@@ -1,0 +1,76 @@
+---
+title: "Assignment6"
+format: docx
+editor: visual
+---
+
+## Quarto
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(ggforce)
+
+plots <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2023/2023-05-02/plots.csv')
+species <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2023/2023-05-02/species.csv')
+surveys <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2023/2023-05-02/surveys.csv')
+```
+
+```{r}
+library(vtable)
+
+species
+```
+
+```{r}
+surveys
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggforce)
+```
+
+```{r}
+
+
+surveys$censusdate <- as.Date(surveys$censusdate, format = "%Y-%m-%d")
+
+surveys$month <- format(surveys$censusdate, "%m")
+
+library(dplyr)
+library(ggplot2)
+library(ggforce)
+
+weights_by_month <- surveys %>%
+  group_by(month) %>%
+  summarise(mean_weight = mean(wgt, na.rm = TRUE))
+
+ggplot(weights_by_month, aes(x = as.integer(month), y = mean_weight, group = 1)) + 
+  theme_minimal() +
+  geom_line(aes(color = ifelse(as.integer(month) %in% c(1,2), "red", ifelse(as.integer(month) %in% c(7,8), "black", "blue")))) + 
+  # had trouble figuring out the color of the lines not sure why it was defaulting to green 
+  ggtitle("How Well do Rodents Fare the Heat? \n Average Rodent Weight by Month") +
+  annotate("text", x = 2, y = 36.1, label = "Cold Wet Months", 
+           size = 3.75, vjust = -1.5, color = "blue") +
+  annotate("text", x = 8, y = 30.8, label = "Warm Wet Months", 
+            size = 3.75, vjust = -1.5, color = "red") +
+  labs(x = "Month", y = "Rodent Weight (g)") +
+  scale_x_continuous(breaks = c(9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8), labels = c("Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug")) +
+  annotate("segment", x = 9.25, xend = 8.25, y = 29.5, yend = 29.5,
+           colour = "black", size = 1.1, arrow = arrow()) +
+   annotate("segment", x = 3.25, xend = 2.25, y = 36, yend = 36,
+           colour = "black", size = 1.1, arrow = arrow()) +
+  guides(color = FALSE) +
+  annotate("text", x = 10.9, y = 29.1, label = "Lowest Avg. Weight: 29.4g", 
+           size = 3.5, vjust = -1.5, color = "black") +
+  annotate("text", x = 5, y = 35.55, label = "Highest Avg. Weight: 36.1g", 
+            size = 3.5, vjust = -1.5, color = "black") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_y_continuous(limits = c(29, 37), expand = c(0, 0)) 
+```
+
+```{r}
+weights_by_month
+```

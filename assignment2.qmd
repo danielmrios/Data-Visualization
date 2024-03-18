@@ -1,0 +1,63 @@
+---
+title: "Assignment 2"
+author: "Daniel"
+format: docx
+editor: visual
+---
+
+```{r}
+install.packages('vtable')
+library(vtable)
+library(tidyverse)
+```
+
+```{r}
+library(rio)
+d <- import('Spotify_top50.csv')
+
+install_formats()
+```
+
+```{r}
+sumtable(d)
+```
+
+```{r}
+popularity_by_artist <- d %>%
+  group_by(Artist.Name) %>%
+  summarize(avg_popularity = mean(Popularity))
+  
+appearances_by_artist <- d %>%
+  count(Artist.Name, sort = TRUE)
+
+popularity_by_artist <- popularity_by_artist %>% 
+  arrange(desc(avg_popularity))
+
+artist_popularity = left_join(
+  popularity_by_artist,
+  appearances_by_artist,
+  by = "Artist.Name")
+
+print(artist_popularity)
+```
+
+```{r}
+popularity_by_song <- d %>%
+  select(Track.Name, Danceability, Popularity) %>%
+  mutate(Danceability_Popularity = Danceability + Popularity) %>%
+  arrange(desc(Danceability_Popularity))
+
+print(popularity_by_song)
+```
+
+```{r}
+popularity_by_song <- d %>%
+  mutate(Danceability_Popularity = Danceability + Popularity) %>%
+  arrange(desc(Danceability_Popularity))
+
+print(popularity_by_song)
+```
+
+# **The Best Party Songs of 2019 Using Spotify's Track Properties**
+
+![](images/Screenshot%202023-04-11%20at%2010.45.11%20PM.png)
