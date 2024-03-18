@@ -1,0 +1,324 @@
+---
+title: "DataTranslation"
+format: docx
+editor: visual
+---
+
+## Data Translation Challenge
+
+```{r}
+library(rio)
+library(dplyr)
+sales <- import('sales_data.Rdata')
+
+sales
+```
+
+```{r}
+zip_info <- import('zip_info.csv')
+library(vtable)
+
+zip_info
+```
+
+## Cleaning the Data
+
+```{r}
+sales <- sales %>% 
+  mutate(
+    Quantity = as.numeric(Quantity),
+    PriceEach = as.numeric(PriceEach))
+```
+
+Knowing that we have specific product categories to work with, although limited, there's certainly a possibility that we could get some useful takeaways about what phones, batteries, or monitors are more popular.
+
+```{r}
+unique(sales$Product)
+```
+
+From here we can divide these into categories: Headphones, Charging cables, Laptops, Phones, Batteries, Monitors, and Washing Machines / Dryers, and TVs.
+
+With the limited data/products info many of these categories wont be able to tell us much. But we can work with Phones, perhaps Google vs Apple as they're two competitors and have a large market share. As well as Headphones and Monitors.
+
+```{r}
+# First we'll have to divide them into those groups 
+sales <- sales %>%
+  mutate(category = case_when(
+      grepl("*Cable*", Product, ignore.case = TRUE) ~ "Charging Cable",
+      grepl("iPhone", Product, ignore.case = TRUE) |
+      grepl("Vareebadd Phone", Product, ignore.case = TRUE) |
+      grepl("Google Phone", Product, ignore.case = TRUE) ~ "Phone ",
+      grepl("*Laptop*", Product, ignore.case = TRUE) ~ "Laptop",
+      grepl("*Headphones*", Product, ignore.case = TRUE) ~ "Headphones",
+      grepl("*Batteries*", Product, ignore.case = TRUE) ~ "Batteries",
+      grepl("*Monitor*", Product, ignore.case = TRUE) ~ "Monitor", 
+      grepl("*LG*", Product, ignore.case = TRUE) ~ "Dryer/Washer",
+      grepl("*TV*", Product, ignore.case = TRUE) ~ "TV", 
+      TRUE ~ NA_character_))
+
+```
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+ggplot(subset(sales, grepl("Monitor", category)), aes(x = Product)) +
+  geom_bar() +
+  labs(x = "Product", y = "Count") +
+  theme_classic() +
+  ggtitle("Monitors Sold in 2019: \n 27 inches Most Popular Choice ") +
+  scale_x_discrete(limits=c("27in FHD Monitor", "27in 4K Gaming Monitor", "34in Ultrawide Monitor", "20in Monitor"))
+```
+
+Now I want to see if there's a Geographical correlation in products purchased, perhaps by more/less affluent zip codes.
+
+For this I'll have to join the zip_info table to the sales table.
+
+```{r}
+sales <- sales %>% 
+  mutate(
+    ZIP = as.numeric(ZIP))
+zip_info <- zip_info %>% 
+  mutate(
+    ZIP = as.numeric(ZIP))
+
+tot_data <- merge(zip_info, sales, by = "ZIP")
+tot_data
+```
+
+I want to first focus my analysis on finding optimal times of the year to ramp up advertising, so I'll look for possible "buying seasons"
+
+```{r}
+library(ggplot2)
+library(lubridate)
+
+tot_data <- tot_data %>%
+  mutate(month_name = month(DateTime, label = TRUE))
+
+tot_data_by_month <- tot_data %>%
+  mutate(month = month(DateTime), month_name = month(DateTime, label = TRUE)) %>%
+  group_by(month, month_name) %>%
+  summarize(count = n())
+
+ggplot(tot_data_by_month, aes(x = month_name, y = count, group = 1)) +
+  theme_classic() +
+  geom_line(size = 1.3, aes(color = ifelse(as.integer(month) %in% c(3, 4, 10, 11, 12), "black", "red"))) +
+  labs(x = "Month", y = "Sales", title = "Sales by Month: Optimal Advertising Periods") +
+  annotate("segment", x = 3, xend = 3.8, y = 20000, yend = 19000,
+           colour = "black", size = 1.3, arrow = arrow()) +
+   annotate("segment", x = 9, xend = 10, y = 23000, yend = 22000,
+           colour = "black", size = 1.3, arrow = arrow()) +
+  guides(color = FALSE) +
+  annotate("text", x = 3.5, y = 20000, label = "Spring Shopping Season?", 
+           size = 4, vjust = -1.5, color = "black") +
+  annotate("text", x = 7.5, y = 23000, label = "Holiday Shopping Season", 
+            size = 4, vjust = -1.5, color = "black") 
+```
+
+This graph has some expected conclusions and some surprising conclusions. The expected is the holiday season, most significantly in December having by far the most sales, seeing some of that increase starting in October. A bit unexpected is the increase in April, could this be a possible second buying season?
+
+What next comes to mind is looking further at what composes the sales, is it an increase of a certain product that's driving the increase or just a general increase overall ?
+
+```{r}
+category_by_month <- tot_data %>%
+  group_by(category, month_name) %>%
+  summarize(count = n(), .groups = 'drop')
+
+ggplot(category_by_month, aes(x = month_name, y = count, color = category, group = category)) +
+  geom_line(size = 0.8) +
+  labs(x = "Month", y = "Sales", title = "Sales by Category Over Time") +
+  theme_classic()
+```
+
+From this we can see that they follow a simiar trend, so rather than there being instances of certain products driving up that number we can infer it's all of them. And confirms there's an April consumer buying surge, this could be useful for planning advertising roll outs over the course of the year.
+
+```{r}
+avg_sales_by_day <- tot_data %>%
+  mutate(day_of_week = wday(DateTime, label = TRUE)) %>%
+  group_by(day_of_week) %>%
+  summarize(total_sales = n(),
+            num_days = n_distinct(date(DateTime))) %>%
+  mutate(average_sales = total_sales / num_days)
+
+ggplot(avg_sales_by_day, aes(x = day_of_week, y = average_sales)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Day of Week", y = "Average Sales", title = "Average Sales by Day of the Week") +
+  theme_classic()
+```
+
+```{r}
+tot_data_by_hour_week <- tot_data %>%
+  mutate(hour = hour(DateTime),
+         day_of_week = wday(DateTime, label = TRUE)) %>%
+  group_by(hour, day_of_week) %>%
+  summarize(count = mean(n())) %>%
+  ungroup()
+
+tot_data_by_hour_week
+
+ggplot(tot_data_by_hour_week, aes(x = hour, y = count, group = day_of_week, color = day_of_week)) +
+  geom_line() +
+  labs(x = "Hour", y = "Average Sales", title = "Average Sales per Hour over the Course of a Week", color = "Day of Week") +
+  theme_minimal() 
+```
+
+Having looked at the times of year that generate the most sales it'd be interesting to now look at the time of day most shopping is done.
+
+```{r}
+tot_data_by_hour <- tot_data %>%
+  mutate(hour = hour(DateTime), hour_time = hour(DateTime)) %>%
+  group_by(hour, hour_time) %>%
+  summarize(count = n()) 
+
+tot_data_by_hour
+
+ggplot(tot_data_by_hour, aes(x = hour_time, y = count, fill = (hour_time %in% c(11:13, 18:20)))) +
+  geom_bar(stat = "identity") +
+  labs(x = "Hour", y = "Sales", title = "Most Active Shopping Times") +
+  theme_classic() +
+    scale_fill_manual(values = c("grey40", "royalblue3"), guide = "none") +
+  annotate("segment", x = 19, xend = 19, y = 13000, yend = 14200,
+           colour = "black", size = 1.3) +
+   annotate("segment", x = 12, xend = 12, y = 12700, yend = 14200,
+           colour = "black", size = 1.3) +
+  guides(color = FALSE) +
+  annotate("text", x = 12, y = 13500, label = "12 PM", 
+           size = 5, vjust = -2, color = "black") +
+  annotate("text", x = 19, y = 13500, label = "7 PM", 
+            size = 5, vjust = -2, color = "black") +
+   ylim(0, 15000)
+```
+
+```{r}
+
+```
+
+```{r}
+tot_data <- tot_data %>%
+  mutate(hour = hour(DateTime), hour_time = hour(DateTime))
+
+tot_data
+
+unique_zip_rows <- tot_data %>%
+  distinct(ZIP, .keep_all = TRUE)
+
+unique_zip_rows
+```
+
+```{r}
+average_hour_by_month <- tot_data %>%
+  group_by(month_name) %>%
+  summarize(average_hour = mean(hour_time))
+
+ggplot(average_hour_by_month, aes(x = month_name, y = average_hour, group = 1)) +
+  geom_line() +
+  labs(x = "Month", y = "Average Hour", title = "Average Hour by Month") +
+  theme_classic()
+```
+
+Delving deeper into marketing strategies it'd be interesting to shift to regional and demographic marketing strategies to see if there's a correlation between products purchased and income.
+
+```{r}
+avg_price_by_zip <- tot_data %>%
+  group_by(ZIP) %>%
+  summarize(AvgPrice = mean(PriceEach))
+
+tot_data <- tot_data %>%
+  left_join(avg_price_by_zip, by = "ZIP")
+
+ggplot(tot_data, aes(x = PCIncome, y = AvgPrice)) +
+  geom_point(color = "navyblue") +
+  geom_smooth(method = "lm", se = FALSE, color = "red3") +
+  labs(x = "Income Per Capita", y = "Average Product Sale Price", title = "Price Per Product and Income") +
+  theme_minimal()
+```
+
+Types of Products by population density
+
+```{r}
+data_by_pop <- tot_data %>%
+  group_by(MedianAge, category) %>%
+  summarize(count = n())
+
+ggplot(data_by_pop, aes(x = MedianAge, y = count, color = category)) + 
+  geom_line() +
+  geom_point()
+  labs(x = "Population", y = "Sales") +
+  theme_classic()
+```
+
+```{r}
+library(ggforce)
+data_by_pop1 <- tot_data %>%
+  group_by(MedianAge, PCIncome, TotalPopulation) %>%
+  summarize(total_sales = sum(PriceEach)) %>%
+  mutate(average_spent = total_sales / TotalPopulation)
+
+data_by_pop1
+
+ggplot(data_by_pop1, aes(x = PCIncome, y = MedianAge, size = average_spent, color = average_spent)) +
+  geom_point(alpha = 0.85) +
+  scale_size_continuous(range = c(2, 13)) +
+  scale_color_gradient(low = "lightblue2", high = "midnightblue", limits = c(63, 277)) +
+  labs(x = "Income Per Capita", y = "Age", title = "Target Demographic: Mid Thirties With Average to Above Average Income", color = "Average Spent Per Resident") +
+  theme_minimal() +
+  guides(size = "none") +
+  annotate("text", x = 73000, y = 26, label = "63% of Sales Came From These ZIP's", 
+           size = 3.5, vjust = -1.5, color = "black") +
+  annotate("text", x = 73000, y = 20.5, label = "Age Range: 32 - 38.5 \n Per Capita Income Range: $47,000 to $91,000 ", 
+           size = 3.5, vjust = -1.5, color = "black") +
+  ylim(20.5, 44.5)
+```
+
+```{r}
+expensive_products <- c("Apple Airpods Headphones", "Macbook Pro Laptop", "iPhone", "27in 4K Gaming Monitor", "Lightning Charging Cable")
+
+tot_data <- tot_data %>%
+  mutate(IsExpensive = ifelse(Product %in% expensive_products, "Expensive", "Not Expensive"))
+
+# Calculate the count of expensive products by category and PCIncome
+expensive_count <- tot_data %>%
+  filter(IsExpensive == "Expensive") %>%
+  group_by(MedianHHIncome, category) %>%
+  summarize(ExpensiveCount = n(), .groups = "drop")
+
+# Calculate the total count of products by category and PCIncome
+total_count <- tot_data %>%
+  group_by(MedianHHIncome, category) %>%
+  summarize(TotalCount = n(), .groups = "drop")
+
+# Calculate the percentage of expensive products bought by category and PCIncome
+percentage_expensive <- expensive_count %>%
+  left_join(total_count, by = c("MedianHHIncome", "category")) %>%
+  mutate(Percentage = ExpensiveCount / TotalCount * 100)
+
+percentage_expensive
+
+# Create the point graph using ggplot2
+ggplot(percentage_expensive, aes(x = MedianHHIncome, y = Percentage)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(x = "Income Per Capita", y = "Percentage of Expensive Products", title = "Percentage of Expensive Products Bought by Category") +
+  theme_classic()
+```
+
+```{r}
+data_by_pop <- tot_data %>%
+  group_by(PCIncome, category) %>%
+  summarize(total_sales = n()) %>%
+  group_by(PCIncome) %>%
+  mutate(share_sales = total_sales / sum(total_sales) * 100)
+
+ggplot(data_by_pop, aes(x = PCIncome, y = share_sales, color = category)) +
+  geom_point() +
+  geom_line(size = 1) +
+  labs(x = "Income Per Capita", y = "Share of Sales (%)", title = "Types of Products Bought Across Income Groups: Little Variation") +
+  theme_classic()
+```
+
+It's possible that the bump in sales in April could have a seasonal factor associated. For grade school and universities its nearing summer, the weather is nicer, etc. could this be a factor in that increase? One way we could quantify this is by grouping zip codes into regions, and seeing if theres a noticeable difference bwteen regions where the weather improves later / earlier.
+
+North -\> NYC, Boston, Seattle, Portland
+
+South -\> Atlanta, Austin, Dallas, LA, San Francisco
